@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformer Data Flow Animation</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --accent-color: #38bdf8;
+            --block-color: #1e293b;
+            --border-color: #475569;
+            --highlight-color: #fbbf24;
+            --flow-color: #38bdf8;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .controls {
+            margin-bottom: 30px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background-color: rgba(15, 23, 42, 0.85);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        button {
+            background-color: var(--block-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--border-color);
+        }
+
+        button.active {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            font-weight: bold;
+        }
+
+        .canvas {
+            position: relative;
+            width: 800px;
+            min-height: 1200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .component {
+            background-color: var(--block-color);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            width: 300px;
+            position: relative;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            z-index: 2;
+        }
+
+        .component.active {
+            border-color: var(--highlight-color);
+            box-shadow: 0 0 15px var(--highlight-color);
+        }
+
+        .component .label {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .component .details {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .help-tooltip {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 12px);
+            transform: translateX(-50%);
+            width: 260px;
+            background-color: #020617;
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 10px;
+            color: var(--text-color);
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: left;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 20;
+        }
+
+        .component:hover .help-tooltip,
+        .sub-block:hover .help-tooltip {
+            opacity: 1;
+        }
+
+        .embedding-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .transformer-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            border: 2px dashed var(--border-color);
+            padding: 20px;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .block {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 10px;
+            background-color: rgba(30, 41, 59, 0.5);
+            width: 350px;
+        }
+
+        .sub-block {
+            background-color: var(--block-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 8px;
+            text-align: center;
+            font-size: 14px;
+            position: relative;
+        }
+
+        .sub-block.active {
+            border-color: var(--highlight-color);
+            box-shadow: 0 0 10px var(--highlight-color);
+        }
+
+        .arrow {
+            position: absolute;
+            width: 2px;
+            background-color: var(--border-color);
+            z-index: 1;
+        }
+
+        .flow-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: var(--flow-color);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--flow-color);
+            z-index: 3;
+            pointer-events: none;
+            display: none;
+        }
+
+        .residual-line {
+            position: absolute;
+            border: 1px solid var(--border-color);
+            border-left: none;
+            border-bottom: none;
+            border-radius: 0 10px 0 0;
+            z-index: 1;
+        }
+
+        .status-text {
+            margin-top: 20px;
+            font-style: italic;
+            color: var(--accent-color);
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Transformer Data Flow</h1>
+    
+    <div class="controls">
+        <button id="playPauseBtn">Play</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="status-text" id="statusText">Ready to start...</div>
+
+    <div class="canvas" id="canvas">
+        <!-- Input -->
+        <div class="component" id="comp-input">
+            <div class="label">Token IDs</div>
+            <div class="details">(B, T)</div>
+        </div>
+
+        <div class="embedding-container">
+            <div class="component" id="comp-wte">
+                <div class="label">wte (Token Emb)</div>
+                <div class="details">[65, 384]</div>
+            </div>
+            <div class="component" id="comp-wpe">
+                <div class="label">wpe (Pos Emb)</div>
+                <div class="details">[256, 384]</div>
+            </div>
+        </div>
+
+        <div class="component" id="comp-sum">
+            <div class="label">Summation</div>
+            <div class="details">x = tok_emb + pos_emb (B, T, 384)</div>
+        </div>
+
+        <div class="transformer-stack" id="stack">
+            <!-- Blocks will be generated here -->
+        </div>
+
+        <div class="component" id="comp-lnf">
+            <div class="label">LayerNorm (ln_f)</div>
+            <div class="details">Final normalization</div>
+        </div>
+
+        <div class="component" id="comp-head">
+            <div class="label">lm_head</div>
+            <div class="details">Linear: 384 &rarr; 65</div>
+        </div>
+
+        <div class="component" id="comp-logits">
+            <div class="label">Logits</div>
+            <div class="details">(B, T, 65)</div>
+        </div>
+
+        <div id="particle" class="flow-particle"></div>
+    </div>
+
+    <script>
+        const stack = document.getElementById('stack');
+        const nLayers = 6;
+        const blocks = [];
+
+        const helpText = {
+            'comp-input': 'Integer token IDs are the compact vocabulary indexes produced by tokenization. The model starts with symbols, not meaning-rich vectors.',
+            'comp-wte': 'Word Token Embedding table turns each token ID into a learned vector. Intuitively, this gives each symbol a location in model space.',
+            'comp-wpe': 'Word Position Embedding table tells the model where each token sits in the sequence, since attention alone has no built-in order.',
+            'comp-sum': 'Token and position vectors are added to produce the starting hidden state. Each position now carries both identity and order information.',
+            'comp-lnf': 'The final layer norm stabilizes the last hidden states before prediction, keeping feature scales well-behaved.',
+            'comp-head': 'The language-model head scores every vocabulary token from each final hidden vector.',
+            'comp-logits': 'Logits are raw next-token scores. Higher values mean the model currently prefers that token more.'
+        };
+
+        // Generate Transformer Blocks
+        for (let i = 0; i < nLayers; i++) {
+            const blockDiv = document.createElement('div');
+            blockDiv.className = 'block';
+            blockDiv.id = `block-${i}`;
+            
+            blockDiv.innerHTML = `
+                <div style="text-align:center; font-size:12px; color:#64748b; margin-bottom:5px;">Block ${i+1}</div>
+                <div class="sub-block" id="block-${i}-ln1">LayerNorm 1</div>
+                <div class="sub-block" id="block-${i}-attn">Self-Attention</div>
+                <div class="sub-block" id="block-${i}-ln2">LayerNorm 2</div>
+                <div class="sub-block" id="block-${i}-mlp">MLP</div>
+            `;
+            stack.appendChild(blockDiv);
+            blocks.push(blockDiv);
+
+            helpText[`block-${i}-ln1`] = 'LayerNorm normalizes the current representation before attention. This keeps activations stable while preserving the residual stream.';
+            helpText[`block-${i}-attn`] = 'Self-attention lets each token gather information from earlier tokens. It behaves like content-based lookup over the context.';
+            helpText[`block-${i}-ln2`] = 'This LayerNorm prepares the post-attention representation for the MLP, again keeping scale predictable.';
+            helpText[`block-${i}-mlp`] = 'MLP means multi-layer perceptron. It processes each token position independently, transforming features after attention has mixed contextual information.';
+        }
+
+        Object.entries(helpText).forEach(([id, text]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const tooltip = document.createElement('div');
+            tooltip.className = 'help-tooltip';
+            tooltip.innerText = text;
+            el.appendChild(tooltip);
+        });
+
+        const flowSteps = [
+            { id: 'comp-input', text: 'Tokens enter the model...' },
+            { id: 'comp-wte', text: 'Tokens mapped to embedding vectors...' },
+            { id: 'comp-wpe', text: 'Position info added...' },
+            { id: 'comp-sum', text: 'Combining token and position embeddings...' },
+        ];
+
+        for (let i = 0; i < nLayers; i++) {
+            flowSteps.push({ id: `block-${i}-ln1`, text: `Block ${i+1}: Normalizing for attention...` });
+            flowSteps.push({ id: `block-${i}-attn`, text: `Block ${i+1}: Calculating self-attention...` });
+            flowSteps.push({ id: `block-${i}-ln2`, text: `Block ${i+1}: Normalizing for MLP...` });
+            flowSteps.push({ id: `block-${i}-mlp`, text: `Block ${i+1}: Processing with MLP...` });
+        }
+
+        flowSteps.push({ id: 'comp-lnf', text: 'Final layer normalization...' });
+        flowSteps.push({ id: 'comp-head', text: 'Projecting to vocabulary size...' });
+        flowSteps.push({ id: 'comp-logits', text: 'Predicting next token logits!' });
+
+        let currentStep = -1;
+        let isPlaying = false;
+        let timer = null;
+
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusText = document.getElementById('statusText');
+        const particle = document.getElementById('particle');
+
+        function updateActiveState() {
+            document.querySelectorAll('.component, .sub-block').forEach(el => el.classList.remove('active'));
+            if (currentStep >= 0 && currentStep < flowSteps.length) {
+                const step = flowSteps[currentStep];
+                const el = document.getElementById(step.id);
+                if (el) el.classList.add('active');
+                statusText.innerText = step.text;
+                animateParticleTo(el);
+            }
+        }
+
+        function animateParticleTo(targetEl) {
+            const rect = targetEl.getBoundingClientRect();
+            const canvasRect = document.getElementById('canvas').getBoundingClientRect();
+            
+            particle.style.display = 'block';
+            particle.style.transition = 'all 0.5s ease-in-out';
+            particle.style.left = (rect.left - canvasRect.left + rect.width / 2 - 4) + 'px';
+            particle.style.top = (rect.top - canvasRect.top + rect.height/2) + 'px';
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+
+        function nextStep() {
+            currentStep++;
+            if (currentStep >= flowSteps.length) {
+                currentStep = -1; // Loop back
+            }
+            updateActiveState();
+        }
+
+        playPauseBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            playPauseBtn.innerText = isPlaying ? 'Pause' : 'Play';
+            playPauseBtn.classList.toggle('active', isPlaying);
+            
+            if (isPlaying) {
+                timer = setInterval(nextStep, 1000);
+            } else {
+                clearInterval(timer);
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            currentStep = -1;
+            isPlaying = false;
+            clearInterval(timer);
+            playPauseBtn.innerText = 'Play';
+            playPauseBtn.classList.remove('active');
+            statusText.innerText = 'Ready to start...';
+            document.querySelectorAll('.component, .sub-block').forEach(el => el.classList.remove('active'));
+            particle.style.display = 'none';
+        });
+
+        // Initial position for particle relative to canvas
+        window.addEventListener('resize', () => {
+            if (currentStep >= 0) updateActiveState();
+        });
+    </script>
+</body>
+</html>

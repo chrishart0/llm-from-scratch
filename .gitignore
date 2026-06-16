@@ -1,3 +1,9 @@
+# OSX
+.DS_Store
+
+# auth files
+clearml.auth.dict.txt
+
 # Python
 __pycache__/
 *.py[oc]

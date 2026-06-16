@@ -207,9 +207,23 @@ This calls the training function with the default config (6L/6H/384D, 5000 steps
 
 ```python
 if __name__ == "__main__":
-    import sys
-    data_path = sys.argv[1] if len(sys.argv) > 1 else "../data/shakespeare.txt"
-    train(data_path)
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="Train a GPT model from scratch")
+    parser.add_argument("data_path", nargs="?", 
+                        default=str(Path(__file__).parent / "data" / "shakespeare.txt"),
+                        help="Path to training data file")
+    parser.add_argument("--max_steps", type=int, default=5000, help="Number of training steps")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
+    parser.add_argument("--n_layer", type=int, default=6, help="Number of transformer layers")
+    parser.add_argument("--n_head", type=int, default=6, help="Number of attention heads")
+    parser.add_argument("--n_embd", type=int, default=384, help="Embedding dimension")
+    parser.add_argument("--block_size", type=int, default=256, help="Context window size")
+    args = parser.parse_args()
+
+    train(args.data_path, max_steps=args.max_steps, batch_size=args.batch_size,
+          n_layer=args.n_layer, n_head=args.n_head, n_embd=args.n_embd, block_size=args.block_size)
 ```
 
 ### What Each Part Does

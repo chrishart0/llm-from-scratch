@@ -34,6 +34,8 @@ class GPTConfig:
 
 ### Embeddings
 
+An embedding is a learned vector of numbers that represents a token or position in a way the model can use. The token ID is only an index; the embedding vector is the learned representation the transformer actually processes.
+
 ```python
 import torch
 import torch.nn as nn
@@ -63,6 +65,8 @@ Two embedding tables:
 
 ```python
     def forward(self, idx, targets=None):
+        # Batch Size,
+        # Sequence length
         B, T = idx.shape
         pos = torch.arange(0, T, device=idx.device)
 
@@ -296,10 +300,11 @@ Two key design choices:
 ### Parameter Count
 
 ```python
-config = GPTConfig()
-model = GPT(config)
-n_params = sum(p.numel() for p in model.parameters())
-print(f"Parameters: {n_params / 1e6:.1f}M")  # ~10.8M
+if __name__ == "__main__":
+    config = GPTConfig()
+    model = GPT(config)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"Parameters: {n_params / 1e6:.1f}M")  # ~10.8M
 ```
 
 Where do the parameters live?
