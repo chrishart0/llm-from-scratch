@@ -3,6 +3,7 @@
 
 # auth files
 clearml.auth.dict.txt
+.env
 
 # Python
 __pycache__/
