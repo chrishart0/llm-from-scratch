@@ -5,7 +5,7 @@ description = "Train a GPT from scratch on a MacBook"
 authors = [{ name = "John Gardner (Sinjhin)", email = "john@ardea.io" }]
 readme = "README.md"
 license = { file = "LICENSE.md" }
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.10,<3.11" # ">=3.12,<3.13"
 dependencies = [
     "clearml>=2.1.8",
     "datasets>=4.5.0",
