@@ -5,6 +5,7 @@ from rich import print
 
 from llm.config import Config
 from llm.model import GPT
+from llm.tokenizer import Tokenizer
 from llm.trainer import Trainer
 
 
@@ -27,8 +28,10 @@ def _resolve_checkpoint(config):
 def train():
   config = Config.from_args()
   text = open(config.data_path).read()
+  tokenizer = Tokenizer(text, encoder=config.encoder)
+  config.vocab_size = tokenizer.vocab_size
   model = GPT(config)
-  trainer = Trainer(model, text, config)
+  trainer = Trainer(model, tokenizer, text, config)
 
   trainer.train()
 
@@ -39,14 +42,19 @@ def main():
   ckpt_path = _resolve_checkpoint(config)
   checkpoint = torch.load(ckpt_path, weights_only=False)
 
-  model = GPT(checkpoint["config"])
+  ckpt_config = checkpoint["config"]
+  model = GPT(ckpt_config)
   model.load_state_dict(checkpoint["model_state_dict"])
+
+  if ckpt_config.encoder == "char":
+    tokenizer = Tokenizer.from_maps(checkpoint["stoi"], checkpoint["itos"])
+  else:
+    tokenizer = Tokenizer(encoder="tiktoken")
 
   print(f"Loaded {ckpt_path}")
   output = model.generate(
     config.prompt,
-    checkpoint["stoi"],
-    checkpoint["itos"],
+    tokenizer,
     temperature=config.temperature,
     top_k=config.top_k,
     max_new_tokens=config.max_new_tokens,

@@ -101,10 +101,9 @@ class GPT(nn.Module):
 
 
     @torch.no_grad()
-    def generate(model, prompt, stoi, itos, max_new_tokens=200, temperature=0.8, top_k=40):
+    def generate(model, prompt, tokenizer, max_new_tokens=200, temperature=0.8, top_k=40):
         device = next(model.parameters()).device
-        tokens = [stoi[c] for c in prompt if c in stoi]
-        idx = torch.tensor([tokens], dtype=torch.long, device=device)
+        idx = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
 
         model.eval()
         for _ in range(max_new_tokens):
@@ -120,4 +119,4 @@ class GPT(nn.Module):
             next_token = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, next_token], dim=1)
 
-        return "".join([itos[i] for i in idx[0].tolist()])
+        return tokenizer.decode(idx[0].tolist())

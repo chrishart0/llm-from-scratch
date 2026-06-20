@@ -6,17 +6,18 @@ from dataclasses import dataclass
 class Config:
     # data
     data_path: str = "data/stranger.txt"
+    encoder: str = "char"      # "char" or "tiktoken"
 
     # model
     vocab_size: int = 93       # character-level: 65 unique chars in Shakespeare (93 in stranger)
     block_size: int = 256      # max sequence length (context window)
-    n_layer: int = 6           # number of transformer blocks
-    n_head: int = 6            # number of attention heads
+    n_layer: int = 6          # number of transformer blocks
+    n_head: int = 6           # number of attention heads
     n_embd: int = 384          # embedding dimension
 
     # training
-    max_steps: int = 200 # 5000
-    batch_size: int = 64
+    max_steps: int = 5000
+    batch_size: int = 128
     learning_rate: float = 1e-3
     weight_decay: float = 0.01
     warmup_steps: int = 100
@@ -39,6 +40,7 @@ class Config:
         defaults = cls()
         parser = argparse.ArgumentParser(description="Train a GPT model from scratch")
         parser.add_argument("data_path", nargs="?", default=defaults.data_path, help="Path to training data file")
+        parser.add_argument("--encoder", default=defaults.encoder, choices=["char", "tiktoken"], help="Tokenizer encoder")
         parser.add_argument("--max_steps", type=int, default=defaults.max_steps, help="Number of training steps")
         parser.add_argument("--batch_size", type=int, default=defaults.batch_size, help="Batch size for training")
         parser.add_argument("--n_layer", type=int, default=defaults.n_layer, help="Number of transformer layers")
@@ -55,6 +57,7 @@ class Config:
 
         return cls(
             data_path=args.data_path,
+            encoder=args.encoder,
             block_size=args.block_size,
             n_layer=args.n_layer,
             n_head=args.n_head,

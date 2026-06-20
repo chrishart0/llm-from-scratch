@@ -8,7 +8,8 @@ from clearml import Task
 
 
 class Trainer:
-  def __init__(self, model, data, config):
+  def __init__(self, model, tokenizer, data, config):
+    self.tokenizer = tokenizer
     self.data = data
     self.config = config
     self.device = self.get_device()
@@ -55,16 +56,9 @@ class Trainer:
           return None
 
 
-  def load_data(self, filepath, block_size, batch_size, device):
-      text = self.data
-
-      chars = sorted(set(text))
-      vocab_size = len(chars)
-      stoi = {c: i for i, c in enumerate(chars)}
-      itos = {i: c for c, i in stoi.items()}
-
-      tokens = torch.tensor([stoi[c] for c in text], dtype=torch.long)
-      print(f"Dataset: {len(tokens):,} chars, vocab size: {vocab_size}")
+  def load_data(self, block_size, batch_size, device):
+      tokens = torch.tensor(self.tokenizer.encode(self.data), dtype=torch.long)
+      print(f"Dataset: {len(tokens):,} tokens, vocab size: {self.tokenizer.vocab_size}")
 
       def get_batch(split_tokens):
           ix = torch.randint(len(split_tokens) - block_size - 1, (batch_size,))
@@ -80,7 +74,7 @@ class Trainer:
       def get_val():
           return get_batch(tokens[n:])
 
-      return get_train, get_val, vocab_size, stoi, itos
+      return get_train, get_val
 
 
   def train(self):
@@ -105,12 +99,13 @@ class Trainer:
       os.makedirs(run_dir, exist_ok=True)
       print(f"Saving artifacts to {run_dir}/")
 
-      get_train_batch, get_val_batch, vocab_size, stoi, itos = self.load_data(
-          self.data,
+      get_train_batch, get_val_batch = self.load_data(
           self.config.block_size,
           self.config.batch_size,
           self.device
       )
+      stoi = self.tokenizer.stoi
+      itos = self.tokenizer.itos
 
       print(f"Model: {self.config.n_layer}L/{self.config.n_head}H/{self.config.n_embd}D, "
             f"{sum(p.numel() for p in self.model.parameters()) / 1e6:.1f}M params")
