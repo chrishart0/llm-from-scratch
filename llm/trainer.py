@@ -1,19 +1,18 @@
 import json
 import math
 import os
+from datetime import datetime
 
 import torch
 from clearml import Task
 
-from llm.model import GPT
-
 
 class Trainer:
   def __init__(self, model, data, config):
-    self.model = model
     self.data = data
+    self.config = config
     self.device = self.get_device()
-    self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
+    self.model = model.to(self.device)
 
 
   def get_device(self):
@@ -57,8 +56,7 @@ class Trainer:
 
 
   def load_data(self, filepath, block_size, batch_size, device):
-      with open(self.data, "r") as f:
-          text = f.read()
+      text = self.data
 
       chars = sorted(set(text))
       vocab_size = len(chars)
@@ -75,8 +73,13 @@ class Trainer:
           return x, y
 
       n = int(0.9 * len(tokens))
-      get_train = lambda: get_batch(tokens[:n])
-      get_val = lambda: get_batch(tokens[n:])
+
+      def get_train():
+          return get_batch(tokens[:n])
+
+      def get_val():
+          return get_batch(tokens[n:])
+
       return get_train, get_val, vocab_size, stoi, itos
 
 
@@ -98,6 +101,10 @@ class Trainer:
       device = self.device
       print(f"Using device: {device}")
 
+      run_dir = os.path.join("trials", datetime.now().strftime("%Y%m%d_%H%M%S"))
+      os.makedirs(run_dir, exist_ok=True)
+      print(f"Saving artifacts to {run_dir}/")
+
       get_train_batch, get_val_batch, vocab_size, stoi, itos = self.load_data(
           self.data,
           self.config.block_size,
@@ -108,24 +115,24 @@ class Trainer:
       print(f"Model: {self.config.n_layer}L/{self.config.n_head}H/{self.config.n_embd}D, "
             f"{sum(p.numel() for p in self.model.parameters()) / 1e6:.1f}M params")
 
-      optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.01)
+      optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config.learning_rate, weight_decay=self.config.weight_decay)
 
-      max_lr = 1e-3
+      max_lr = self.config.learning_rate
       min_lr = max_lr * 0.1
-      warmup_steps = 100
+      warmup_steps = self.config.warmup_steps
 
       loss_log = {"steps": [], "train": [], "val": []}
-      sample_steps = set(torch.linspace(1, self.config.max_steps, min(50, self.config.max_steps), dtype=torch.int64).tolist())
+      # sample_steps = set(torch.linspace(1, self.config.max_steps, min(50, self.config.max_steps), dtype=torch.int64).tolist())  # Part 4
       best_loss = float('inf')
       best_step = -1
 
       for step in range(self.config.max_steps):
           # --- validation loss ---
-          if step % 100 == 0:
+          if step % self.config.eval_interval == 0:
               self.model.eval()
               with torch.no_grad():
                   val_losses = []
-                  for _ in range(20):
+                  for _ in range(self.config.eval_iters):
                       x, y = get_val_batch()
                       _, loss = self.model(x, y)
                       val_losses.append(loss.item())
@@ -145,7 +152,7 @@ class Trainer:
           _, loss = self.model(x, y)
           optimizer.zero_grad()
           loss.backward()
-          torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+          torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config.grad_clip)
           optimizer.step()
 
           if logger:
@@ -163,24 +170,24 @@ class Trainer:
                       "config": self.config,
                       "stoi": stoi,
                       "itos": itos,
-                  }, "checkpoint_lowest_loss.pt")
+                  }, os.path.join(run_dir, "checkpoint_lowest_loss.pt"))
 
           # --- log loss ---
           loss_log["steps"].append(step)
           loss_log["train"].append(loss.item())
-          if step % 100 == 0:
+          if step % self.config.eval_interval == 0:
               loss_log["val"].append(val_loss)
 
-          # --- generate sample ---
-          if step in sample_steps:
-              self.model.eval()
-              sample = self.generate(self.model, "To be or not", stoi, itos,
-                              max_new_tokens=100, temperature=0.8)
-              print(f"\n--- Step {step} sample ---\n{sample}\n---\n")
-              if logger:
-                  logger.report_text(title="Generated Samples", series="shakespeare",
-                                    iteration=step, msg=sample)
-              self.model.train()
+          # --- Part 4: generate sample ---
+          # if step in sample_steps:
+          #     self.model.eval()
+          #     sample = self.generate(self.model, "To be or not", stoi, itos,
+          #                     max_new_tokens=100, temperature=0.8)
+          #     print(f"\n--- Step {step} sample ---\n{sample}\n---\n")
+          #     if logger:
+          #         logger.report_text(title="Generated Samples", series="shakespeare",
+          #                           iteration=step, msg=sample)
+          #     self.model.train()
 
           # --- save checkpoint ---
           if step > 0 and step % 1000 == 0:
@@ -190,23 +197,23 @@ class Trainer:
                   "config": self.config,
                   "stoi": stoi,
                   "itos": itos,
-              }, f"checkpoint_{step}.pt")
+              }, os.path.join(run_dir, f"checkpoint_{step}.pt"))
 
-      # --- emit best-loss sample at the end ---
+      # --- emit best-loss info at the end ---
       if best_step >= 0:
           print(f"\n=== Best loss {best_loss:.4f} at step {best_step} ===")
-          # Prefer the dedicated checkpoint if it exists, else use current model
-          ckpt_path = "checkpoint_lowest_loss.pt" if os.path.exists("checkpoint_lowest_loss.pt") else "checkpoint_final.pt"
-          ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-          best_model = GPT(ckpt["config"]).to(device)
-          best_model.load_state_dict(ckpt["model_state_dict"])
-          best_model.eval()
-          best_sample = self.generate(best_model, "To be or not", stoi, itos,
-                                max_new_tokens=100, temperature=0.8)
-          print(f"\n--- Best sample ---\n{best_sample}\n---\n")
-          if logger:
-              logger.report_text(title="Best Loss Sample", series="best",
-                                iteration=best_step, msg=best_sample)
+          # Part 4: reload the best checkpoint and generate a sample (needs `import os` and `from llm.model import GPT`)
+          # ckpt_path = "checkpoint_lowest_loss.pt" if os.path.exists("checkpoint_lowest_loss.pt") else "checkpoint_final.pt"
+          # ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+          # best_model = GPT(ckpt["config"]).to(device)
+          # best_model.load_state_dict(ckpt["model_state_dict"])
+          # best_model.eval()
+          # best_sample = self.generate(best_model, "To be or not", stoi, itos,
+          #                       max_new_tokens=100, temperature=0.8)
+          # print(f"\n--- Best sample ---\n{best_sample}\n---\n")
+          # if logger:
+          #     logger.report_text(title="Best Loss Sample", series="best",
+          #                       iteration=best_step, msg=best_sample)
 
       # --- save final checkpoint and loss log ---
       torch.save({
@@ -215,9 +222,14 @@ class Trainer:
           "config": self.config,
           "stoi": stoi,
           "itos": itos,
-      }, "checkpoint_final.pt")
+      }, os.path.join(run_dir, "checkpoint_final.pt"))
 
-      with open("loss_log.json", "w") as f:
+      with open(os.path.join(run_dir, "loss_log.json"), "w") as f:
           json.dump(loss_log, f)
+
+      if best_step >= 0:
+          final_dir = f"{run_dir}_loss{best_loss:.3f}"
+          os.rename(run_dir, final_dir)
+          print(f"\nRun saved to {final_dir}/")
 
       return self.model, stoi, itos
