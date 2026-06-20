@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 app = "llm.main:main"
+train = "llm.main:train"
 
 [build-system]
 requires = ["hatchling"]

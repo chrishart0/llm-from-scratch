@@ -27,6 +27,13 @@ class Config:
     # clearml
     use_clearml: bool = False
 
+    # generation
+    checkpoint: str | None = None   # run-dir name under trials/; None = newest
+    prompt: str = "To be or not"
+    temperature: float = 0.8
+    top_k: int = 40
+    max_new_tokens: int = 200
+
     @classmethod
     def from_args(cls) -> "Config":
         defaults = cls()
@@ -39,6 +46,11 @@ class Config:
         parser.add_argument("--n_embd", type=int, default=defaults.n_embd, help="Embedding dimension")
         parser.add_argument("--block_size", type=int, default=defaults.block_size, help="Context window size")
         parser.add_argument("--clearml", action="store_true", help="Offload training to ClearML")
+        parser.add_argument("--checkpoint", default=defaults.checkpoint, help="Run dir name under trials/ (default: newest)")
+        parser.add_argument("--prompt", default=defaults.prompt, help="Prompt to start generation from")
+        parser.add_argument("--temperature", type=float, default=defaults.temperature, help="Sampling temperature")
+        parser.add_argument("--top_k", type=int, default=defaults.top_k, help="Only sample from the top-k most likely tokens")
+        parser.add_argument("--max_new_tokens", type=int, default=defaults.max_new_tokens, help="Number of tokens to generate")
         args = parser.parse_args()
 
         return cls(
@@ -50,4 +62,9 @@ class Config:
             max_steps=args.max_steps,
             batch_size=args.batch_size,
             use_clearml=args.clearml,
+            checkpoint=args.checkpoint,
+            prompt=args.prompt,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            max_new_tokens=args.max_new_tokens,
         )
