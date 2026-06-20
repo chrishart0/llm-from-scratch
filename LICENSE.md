@@ -1,0 +1,1 @@
+MIT or some shit.
