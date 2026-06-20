@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class Config:
     # data
     data_path: str = "data/stranger.txt"
-    encoder: str = "char"      # "char" or "tiktoken"
+    encoder: str = "tiktoken"      # "char" or "tiktoken"
 
     # model
     vocab_size: int = 93       # character-level: 65 unique chars in Shakespeare (93 in stranger)
@@ -26,7 +26,7 @@ class Config:
     eval_iters: int = 20
 
     # clearml
-    use_clearml: bool = False
+    use_clearml: bool = True
 
     # generation
     checkpoint: str | None = None   # run-dir name under trials/; None = newest
