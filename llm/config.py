@@ -47,7 +47,7 @@ class Config:
         parser.add_argument("--n_head", type=int, default=defaults.n_head, help="Number of attention heads")
         parser.add_argument("--n_embd", type=int, default=defaults.n_embd, help="Embedding dimension")
         parser.add_argument("--block_size", type=int, default=defaults.block_size, help="Context window size")
-        parser.add_argument("--clearml", action="store_true", help="Offload training to ClearML")
+        parser.add_argument("--clearml", action=argparse.BooleanOptionalAction, default=defaults.use_clearml, help="Offload training to ClearML (--no-clearml forces local)")
         parser.add_argument("--checkpoint", default=defaults.checkpoint, help="Run dir name under trials/ (default: newest)")
         parser.add_argument("--prompt", default=defaults.prompt, help="Prompt to start generation from")
         parser.add_argument("--temperature", type=float, default=defaults.temperature, help="Sampling temperature")
