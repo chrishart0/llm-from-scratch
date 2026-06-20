@@ -37,6 +37,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
+Copy the project to your machine
+```
+git clone https://github.com/ArdeaAI/llm-from-scratch.git
+cd llm-from-scratch
+```
+
 Then set up the project:
 
 ```bash
